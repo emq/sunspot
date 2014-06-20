@@ -63,6 +63,11 @@ describe 'specs with Sunspot stubbed' do
     Post.remove_all_from_index!
   end
 
+  it 'should not send optimize to session' do
+    @session.should_not_receive(:optimize)
+    Sunspot.optimize
+  end
+
   it 'should return false for dirty?' do
     @session.should_not_receive(:dirty?)
     Sunspot.dirty?.should == false
@@ -114,6 +119,10 @@ describe 'specs with Sunspot stubbed' do
 
     it 'should return empty hits' do
       @search.hits.should == []
+    end
+
+    it 'should return the same for raw_results as hits' do
+      @search.raw_results.should == @search.hits
     end
 
     it 'should return zero total' do

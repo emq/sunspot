@@ -364,6 +364,10 @@ For **field facets**, each row represents a particular value for a given
 field. For **query facets**, each row represents an arbitrary scope; the
 facet itself is just a means of logically grouping the scopes.
 
+By default Sunspot will only return the first 100 facet values.  You can
+increase this limit, or force it to return *all* facets by setting
+**limit** to **-1**.
+
 #### Field Facets
 
 ```ruby
@@ -371,6 +375,24 @@ facet itself is just a means of logically grouping the scopes.
 search = Post.search do
   fulltext "pizza"
   facet :author_id
+end
+
+search.facet(:author_id).rows.each do |facet|
+  puts "Author #{facet.value} has #{facet.count} pizza posts!"
+end
+```
+
+If you are searching by a specific field and you still want to see all
+the options available in that field you can **exclude** it in the
+faceting.
+
+```ruby
+# Posts that match 'pizza' and author with id 42
+# Returning counts for each :author_id (even those not in the search result)
+search = Post.search do
+  fulltext "pizza"
+  author_filter = with(:author_id, 42)
+  facet :author_id, exclude: [author_filter]
 end
 
 search.facet(:author_id).rows.each do |facet|
@@ -602,6 +624,35 @@ Post.search do
 end
 ```
 
+### Joins
+
+**Solr 4 and above**
+
+Solr joins allow you to filter objects by joining on additional documents.  More information can be found on the [Solr Wiki](http://wiki.apache.org/solr/Join).
+
+```ruby
+class Photo < ActiveRecord::Base
+  searchable do
+    text :caption, :default_boost => 1.5
+    time :created_at
+    integer :photo_container_id
+  end
+end
+
+class PhotoContainer < ActiveRecord::Base
+  searchable do
+    text :name
+    join(:caption, :type => :string, :join_string => 'from=photo_container_id to=id')
+    join(:photos_created, :type => :time, :join_string => 'from=photo_container_id to=id', :as => 'created_at_d')
+  end
+end
+
+PhotoContainer.search do
+  with(:caption, 'blah')
+  with(:photos_created).between(Date.new(2011,3,1), Date.new(2011,4,1))
+end
+```
+
 ### Highlighting
 
 Highlighting allows you to display snippets of the part of the document
@@ -730,6 +781,19 @@ results = Sunspot.more_like_this(post) do
 end
 ```
 
+To use more_like_this you need to have the [MoreLikeThis handler enabled in solrcofig.xml](http://wiki.apache.org/solr/MoreLikeThisHandler).
+
+Example handler will look like this:
+
+```
+<requestHandler class="solr.MoreLikeThisHandler" name="/mlt">
+  <lst name="defaults">
+    <str name="mlt.mintf">1</str>
+    <str name="mlt.mindf">2</str>
+  </lst>
+</requestHandler>
+```
+
 ## Indexes In Depth
 
 TODO
@@ -836,6 +900,9 @@ bundle exec rake sunspot:solr:reindex
 
 # or, to be specific to a certain model with a certain batch size:
 bundle exec rake sunspot:solr:reindex[500,Post] # some shells will require escaping [ with \[ and ] with \]
+
+# to skip the prompt asking you if you want to proceed with the reindexing:
+bundle exec rake sunspot:solr:reindex[,,true] # some shells will require escaping [ with \[ and ] with \]
 ```
 
 ## Use Without Rails
@@ -871,6 +938,29 @@ TODO
 ## Type Reference
 
 TODO
+
+## Configuration
+
+Configure Sunspot by creating a *config/sunspot.yml* file or by setting a `SOLR_URL` or a `WEBSOLR_URL` environment variable.
+The defaults are as follows.
+
+```yaml
+development:
+  solr:
+    hostname: localhost
+    port: 8982
+    log_level: INFO
+
+test:
+  solr:
+    hostname: localhost
+    port: 8981
+    log_level: WARNING
+```
+
+You may want to use SSL for production environments with a username and password. For example, set `SOLR_URL` to `https://username:password@production.solr.example.com/solr`.
+
+You can examine the value of `Sunspot::Rails.configuration` at runtime.
 
 ## Development
 
@@ -989,6 +1079,7 @@ $ yardoc -o docs */lib/**/*.rb - README.md
 * [Solr, and Sunspot](http://www.kuahyeow.com/2009/08/solr-and-sunspot.html) (YT!)
 * [The Saga of the Switch](http://web.archive.org/web/20100427135335/http://mrb.github.com/2010/04/08/the-saga-of-the-switch.html) (mrb -- includes comparison of Sunspot and Ultrasphinx)
 * [Conditional Indexing with Sunspot](http://mikepackdev.com/blog_posts/19-conditional-indexing-with-sunspot) (mikepack)
+* [Introduction to Full Text Search for Rails Developers](http://valve.github.io/blog/2014/02/22/rails-developer-guide-to-full-text-search-with-solr/) (Valve's)
 
 ## License
 
